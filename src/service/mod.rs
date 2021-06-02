@@ -56,9 +56,12 @@ pub async fn docker_info_shiplift(req: Request<State>) -> Result {
     let url = Url::parse("http://localhost:8010/")?;
     let docker = Docker::host(url);
     let state = req.state();
+    log::info!("request for docker info.");
     match docker.info() {
         Ok(request) => {
+            log::info!("request for docker {:?}", request);
             let response = state.client.send(request).await?;
+            log::info!("response from docker {:?}", response);
             Ok(tide::Response::from_res(response))
         },
         Err(err) => {

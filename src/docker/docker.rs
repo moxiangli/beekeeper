@@ -142,7 +142,7 @@ impl Docker {
         path: &str,
     ) -> Result<Request, Error> {
         let url = self.endpoint.join(path)?;
-        request(url, Method::Delete, None, vec![])
+        request(url, Method::Get, None, vec![])
     }
 
     pub(crate) fn get_with_header (
@@ -151,7 +151,7 @@ impl Docker {
         headers: Vec<(&str, String)>,
     ) -> Result<Request, Error> {
         let url = self.endpoint.join(path)?;
-        request(url, Method::Delete, None, headers)
+        request(url, Method::Get, None, headers)
     }
 
     pub(crate) fn post(
@@ -160,7 +160,7 @@ impl Docker {
         body: Option<(Body, Mime)>,
     ) -> Result<Request, Error> {
         let url = self.endpoint.join(path)?;
-        request(url, Method::Delete, body, vec![])
+        request(url, Method::Post, body, vec![])
     }
 
     pub(crate) fn post_with_header (
@@ -170,7 +170,7 @@ impl Docker {
         body: Option<(Body, Mime)>,
     ) -> Result<Request, Error> {
         let url = self.endpoint.join(path)?;
-        request(url, Method::Delete, body, headers)
+        request(url, Method::Post, body, headers)
     }
 
     pub(crate) fn put(
@@ -179,7 +179,7 @@ impl Docker {
         body: Option<(Body, Mime)>,
     ) -> Result<Request, Error> {
         let url = self.endpoint.join(path)?;
-        request(url, Method::Delete, body, vec![])
+        request(url, Method::Put, body, vec![])
     }
 
     pub(crate) fn put_with_header (
@@ -189,7 +189,7 @@ impl Docker {
         body: Option<(Body, Mime)>,
     ) -> Result<Request, Error> {
         let url = self.endpoint.join(path)?;
-        request(url, Method::Delete, body, headers)
+        request(url, Method::Put, body, headers)
     }
 
     pub(crate) fn patch(
@@ -198,7 +198,7 @@ impl Docker {
         body: Option<(Body, Mime)>,
     ) -> Result<Request, Error> {
         let url = self.endpoint.join(path)?;
-        request(url, Method::Delete, body, vec![])
+        request(url, Method::Patch, body, vec![])
     }
 
     pub(crate) fn patch_with_header (
@@ -208,7 +208,7 @@ impl Docker {
         body: Option<(Body, Mime)>,
     ) -> Result<Request, Error> {
         let url = self.endpoint.join(path)?;
-        request(url, Method::Delete, body, headers)
+        request(url, Method::Patch, body, headers)
     }
 
     pub(crate) fn delete(
@@ -230,7 +230,7 @@ impl Docker {
 }
 
 pub fn request(url: Url, method: Method, body: Option<(Body, Mime)>, headers: Vec<(&str, String)>) -> Result<Request, Error>{        
-    let mut request = Request::new(Method::Patch, url);
+    let mut request = Request::new(method, url);
 
     for (name, value) in headers {
         request.insert_header(name, value);
