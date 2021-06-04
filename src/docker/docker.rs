@@ -67,6 +67,7 @@ impl Docker {
             host.host().unwrap().to_owned(),
             host.port().unwrap_or(80)
         );
+        log::debug!("docker: {}", tcp_host_str);
 
         Docker {
             endpoint: host,
@@ -112,30 +113,17 @@ impl Docker {
     }
 
     /// Returns a stream of docker events
-    // pub fn events<'docker>(
-    //     &'docker self,
-    //     opts: &EventsOptions,
-    // ) -> impl Stream<Item = Result<Event>> + Unpin + 'docker {
-    //     let mut path = vec!["/events".to_owned()];
-    //     if let Some(query) = opts.serialize() {
-    //         path.push(query);
-    //     }
-    //     let reader = Box::pin(
-    //         self.stream_get(path.join("?"))
-    //             .map_err(|e| io::Error::new(io::ErrorKind::Other, e)),
-    //     )
-    //     .into_async_read();
+    pub fn events<'docker>(
+        &'docker self,
+        opts: &EventsOptions,
+    ) -> Result<Request, Error> {
+        let mut path = vec!["/events".to_owned()];
+        if let Some(query) = opts.serialize() {
+            path.push(query);
+        }
 
-    //     let codec = futures_codec::LinesCodec {};
-
-    //     Box::pin(
-    //         futures_codec::FramedRead::new(reader, codec)
-    //             .map_err(Error::IO)
-    //             .and_then(|s: String| async move {
-    //                 serde_json::from_str(&s).map_err(Error::SerdeJsonError)
-    //             }),
-    //     )
-    // }
+        self.get(&path.join("?"))
+    }
 
     pub(crate) fn get(
         &self,

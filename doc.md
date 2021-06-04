@@ -33,3 +33,12 @@ create table `swarm_operate_history` (
     operate_reason varchar(256) default null,
     primary key (data_id)
 ) comment 'swarm docker start or stop history.'
+
+create table `host_docker_info` (
+    host_id varchar(64) not null,
+    host_ip varchar(64) not null,
+    docker_port int not null,
+    host_status int not null,
+    update_time datetime not null,
+    primary key (host_id)
+) comment 'host in swarm.'

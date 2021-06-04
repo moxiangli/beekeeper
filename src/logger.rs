@@ -16,11 +16,11 @@ fn setup_logging(verbosity: u64) -> Result<(), fern::InitError> {
             // to include in end-user output. If we don't need them, let's not include them.
             base_config
                 .level(log::LevelFilter::Info)
-                .level_for("overly-verbose-target", log::LevelFilter::Warn)
+                .level_for("beekeeper", log::LevelFilter::Debug)
         }
         1 => base_config
             .level(log::LevelFilter::Debug)
-            .level_for("overly-verbose-target", log::LevelFilter::Info),
+            .level_for("tide", log::LevelFilter::Info),
         2 => base_config.level(log::LevelFilter::Debug),
         _3_or_more => base_config.level(log::LevelFilter::Trace),
     };

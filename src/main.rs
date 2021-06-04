@@ -1,17 +1,23 @@
+
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
-use tide::Server;
+use tide::{
+    Next,
+    Result,
+    Server,
+    Request,
+    Response,
+    StatusCode,
+};
 
-use sqlx::MySqlPool;
+use sqlx::{MySqlPool, FromRow};
+// use serde::{Serialize, Deserialize};
 
-// use std::net::ToSocketAddrs;
-// use tide::listener::ToListener;
-// use tokio::runtime::{Builder, Runtime};
+use http_types::{Url, headers::HeaderValue};
+use http_client::HttpClient;
 
-// use shiplift::Docker;
-// use bollard::Docker;
-// use bollard::API_DEFAULT_VERSION;
-
-// use hyper::Uri;
+use tide::security::{CorsMiddleware, Origin};
 
 
 #[cfg(any(feature = "runtime-std", feature = "docs"))]
@@ -36,9 +42,50 @@ pub struct State {
     pub client: Arc<Client>,
 }
 
+impl State {
+    pub async fn send(&self, request: http_types::Request) -> std::result::Result<http_types::Response, http_types::Error> {
+        log::debug!("request to docker: {:?}", request);
+        let response = self.client.send(request).await;
+        log::debug!("response from docker: {:?}", response);
+        response
+    }
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct DockerDaemonInfo {
+    pub host_ip: String,
+    pub docker_port: i32,
+}
+
+fn docker_id<'a>(
+    mut request: Request<State>,
+    next: Next<'a, State>,
+) -> Pin<Box<dyn Future<Output = Result> + Send + 'a>> {
+    Box::pin(async {
+        let _ = &request.state().db;
+        let id = request.param("docker");
+        if let Ok(id) = id {
+            // let sql = "select host_ip, docker_port from host_docker_info where host_id = ?";
+            // let docker = sqlx::query_as::<_, DockerDaemonInfo>(sql)
+            // .bind(&id)
+            // .fetch_one(db)
+            // .await?;
+            log::debug!("request: {}", request.url());
+            log::debug!("request docker: {}", id);
+
+            // let url = String::from("http://127.0.0.1:8010");
+            let url = Url::parse("http://127.0.0.1:8010")?;
+            request.set_ext(url);
+            Ok(next.run(request).await)
+        } else {
+            Ok(Response::new(StatusCode::BadRequest))
+        }
+    })
+}
+
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     logger::logger_init();
 
     let handle = tokio::runtime::Handle::current();
@@ -52,83 +99,53 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         client: Arc::new(Client::new()),
     };
 
-    let mut app = Server::with_state(state);
-    // app.at("/chia/environment").post(ep);
-
-    // app.at("/chia/status")
-    // .post(service::upload_status)
-    // .get(ep);
+    let mut app = Server::with_state(state.clone());
 
     app.at("/chia/plots").post(service::plot_complete);
-    app.at("/docker/info").get(service::docker_info_shiplift);
+    app.at("/docker/:docker").nest({
+        let mut docker = Server::with_state(state.clone());
+        docker.with(docker_id);
+        docker.at("info").get(service::docker_info);
+        docker.at("ping").get(service::docker_ping);
+        docker.at("events").get(service::docker_events);
+        docker.at("version").get(service::docker_version);
+        
+        
+        docker.at("containers")
+        .get(service::container::list)
+        .post(service::container::create);
+        docker.at("containers/:id")
+        .get(service::container::inspect)
+        .nest({
+            let mut container = Server::with_state(state.clone());
+            container.at("top").get(service::container::top);
+            container.at("logs").get(service::container::logs);
+            container.at("changes").get(service::container::changes);
+            container.at("export").get(service::container::export);
+            container.at("stats").get(service::container::stats);
+            container.at("start").post(service::container::start);
+            container.at("stop").post(service::container::stop);
+            container.at("restart").post(service::container::restart);
+            container.at("kill").post(service::container::kill);
+            container.at("rename").post(service::container::rename);
+            container.at("pause").post(service::container::pause);
+            container.at("unpause").post(service::container::unpause);
+            container.at("attach").post(service::container::attach);
+            container.at("wait").post(service::container::wait);
+            container.at("remove").post(service::container::remove);
+    
+            container
+        });
 
-    // app.listen("172.16.10.10:8030".to_socket_addrs()?.collect::<Vec<_>>()).await?;
+        docker
+    });
+
+    let rules = CorsMiddleware::new()
+    .allow_methods("GET, POST, PUT, DELETE, OPTIONS".parse::<HeaderValue>().unwrap())
+    .allow_origin(Origin::from("*"))
+    .allow_credentials(false);
+    app.with(rules);
+
     app.listen("127.0.0.1:8030").await?;
-
-    // let listener = TcpListener::<State>::from_addr();
     Ok(())
 }
-
-// async fn run() -> Result<(), Box<dyn std::error::Error>> {
-// fn main() -> Result<(), Box<dyn std::error::Error>> {
-//     logger::logger_init();
-
-//     let runtime: Runtime = Builder::new_current_thread()
-//     .worker_threads(2)
-//     .enable_all()
-//     .build()?;
-
-//     // let pool = MySqlPool::connect("mysql://loop:loop123@172.16.10.30:3306/chia").await?;
-//     let connect = MySqlPool::connect("mysql://loop:123456@127.0.0.1:3306/chia");
-//     let pool = runtime.block_on(connect)?;
-
-//     let state = State {
-//         db: pool,
-//     };
-
-//     let mut app = Server::with_state(state);
-//     // app.at("/chia/environment").post(ep);
-
-//     // app.at("/chia/status")
-//     // .post(service::upload_status)
-//     // .get(ep);
-
-//     app.at("/chia/plots").post(service::plot_complete);
-//     app.at("/docker/info").get(service::docker_info);
-
-//     // app.listen("172.16.10.10:8030").await?;
-//     let f = app.listen("127.0.0.1:8030");
-//     runtime.block_on(f)?;
-//     Ok(())
-// }
-
-// #[tokio::main]
-// async fn main() {
-//     let docker = Docker::host(Uri::from_static("http://localhost:8010"));
-
-//     match docker.info().await {
-//         Ok(info) => println!("info {:?}", info),
-//         Err(e) => eprintln!("Error: {}", e),
-//     }
-// }
-
-// #[tokio::main]
-// async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//     let docker = Docker::connect_with_http("http://localhost:8010", 30, API_DEFAULT_VERSION);
-//     // let docker = Docker::host(Uri::from_static("http://localhost:8010"));
-
-//     match docker {
-//         Ok(d) => {
-//             let info = d.info().await;
-//             match info {
-//                 Ok(inf) => {
-//                     eprintln!("{:?}", inf);
-//                 },
-//                 Err(err) => eprintln!("Error: {:?}", err),
-//             }
-//         },
-//         Err(e) => eprintln!("Error: {}", e),
-//     }
-
-//     Ok(())
-// }

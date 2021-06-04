@@ -150,10 +150,11 @@ impl<'docker> Images<'docker> {
         if let Some(query) = opts.serialize() {
             path.push(query);
         }
-        let headers = opts
+        let mut headers = Vec::<(&str, String)>::new();
+        opts
             .auth_header()
-            .map(|a| iter::once(("X-Registry-Auth", a)));
-        self.docker.post(&path.join("?"), None)
+            .map(|a| iter::once(headers.push(("X-Registry-Auth", a))));
+        self.docker.post_with_header(&path.join("?"), headers, None)
     }
 
     /// exports a collection of named images,

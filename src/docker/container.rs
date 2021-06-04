@@ -4,12 +4,16 @@
 
 use std::{collections::HashMap, hash::Hash, iter::Peekable, path::Path, time::Duration};
 
-use http_types::{Mime, Request, Body, Error};
+use http_types::{Body, Error, Mime, Request};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use url::form_urlencoded;
 
-use crate::docker::{docker::Docker, image::Config, network::{NetworkSettings, NetworkInfo}};
+use crate::docker::{
+    docker::Docker,
+    image::Config,
+    network::{NetworkInfo, NetworkSettings},
+};
 
 #[cfg(feature = "chrono")]
 use crate::datetime::datetime_from_unix_timestamp;
@@ -26,10 +30,7 @@ pub struct Container<'docker> {
 
 impl<'docker> Container<'docker> {
     /// Exports an interface exposing operations against a container instance
-    pub fn new<S>(
-        docker: &'docker Docker,
-        id: S,
-    ) -> Self
+    pub fn new<S>(docker: &'docker Docker, id: S) -> Self
     where
         S: Into<String>,
     {
@@ -54,10 +55,7 @@ impl<'docker> Container<'docker> {
     /// Returns a `top` view of information about the container process
     ///
     /// Api Reference: <https://docs.docker.com/engine/api/v1.41/#operation/ContainerTop>
-    pub  fn top(
-        &self,
-        psargs: Option<&str>,
-    ) -> Result<Request, Error> {
+    pub fn top(&self, psargs: Option<String>) -> Result<Request, Error> {
         let mut path = vec![format!("/containers/{}/top", self.id)];
         if let Some(ref args) = psargs {
             let encoded = form_urlencoded::Serializer::new(String::new())
@@ -71,10 +69,7 @@ impl<'docker> Container<'docker> {
     /// Returns a stream of logs emitted but the container instance
     ///
     /// Api Reference: <https://docs.docker.com/engine/api/v1.41/#operation/ContainerLogs>
-    pub fn logs(
-        &self,
-        opts: &LogsOptions,
-    ) -> Result<Request, Error> {
+    pub fn logs(&self, opts: &LogsOptions) -> Result<Request, Error> {
         let mut path = vec![format!("/containers/{}/logs", self.id)];
         if let Some(query) = opts.serialize() {
             path.push(query)
@@ -84,17 +79,20 @@ impl<'docker> Container<'docker> {
     }
 
     /// Attaches a multiplexed TCP stream to the container that can be used to read Stdout, Stderr and write Stdin.
-    pub  fn attach(&self) -> Result<Request, Error> {
-        self.docker.post(&format!(
-            "/containers/{}/attach?stream=1&stdout=1&stderr=1&stdin=1",
-            self.id
-        ),  None)
+    pub fn attach(&self) -> Result<Request, Error> {
+        self.docker.post(
+            &format!(
+                "/containers/{}/attach?stream=1&stdout=1&stderr=1&stdin=1",
+                self.id
+            ),
+            None,
+        )
     }
 
     /// Returns a set of changes made to the container instance
     ///
     /// Api Reference: <https://docs.docker.com/engine/api/v1.41/#operation/ContainerChanges>
-    pub  fn changes(&self) -> Result<Request, Error> {
+    pub fn changes(&self) -> Result<Request, Error> {
         self.docker.get(&format!("/containers/{}/changes", self.id))
     }
 
@@ -115,18 +113,15 @@ impl<'docker> Container<'docker> {
     /// Start the container instance
     ///
     /// Api Reference: <https://docs.docker.com/engine/api/v1.41/#operation/ContainerStart>
-    pub  fn start(&self) -> Result<Request, Error> {
+    pub fn start(&self) -> Result<Request, Error> {
         self.docker
-            .post(&format!("/containers/{}/start", self.id)[..], None)
+            .post(&format!("/containers/{}/start", self.id), None)
     }
 
     /// Stop the container instance
     ///
     /// Api Reference: <https://docs.docker.com/engine/api/v1.41/#operation/ContainerStop>
-    pub  fn stop(
-        &self,
-        wait: Option<Duration>,
-    ) -> Result<Request, Error> {
+    pub fn stop(&self, wait: Option<Duration>) -> Result<Request, Error> {
         let mut path = vec![format!("/containers/{}/stop", self.id)];
         if let Some(w) = wait {
             let encoded = form_urlencoded::Serializer::new(String::new())
@@ -141,10 +136,7 @@ impl<'docker> Container<'docker> {
     /// Restart the container instance
     ///
     /// Api Reference: <https://docs.docker.com/engine/api/v1.41/#operation/ContainerRestart>
-    pub  fn restart(
-        &self,
-        wait: Option<Duration>,
-    ) -> Result<Request, Error> {
+    pub fn restart(&self, wait: Option<Duration>) -> Result<Request, Error> {
         let mut path = vec![format!("/containers/{}/restart", self.id)];
         if let Some(w) = wait {
             let encoded = form_urlencoded::Serializer::new(String::new())
@@ -158,14 +150,11 @@ impl<'docker> Container<'docker> {
     /// Kill the container instance
     ///
     /// Api Reference: <https://docs.docker.com/engine/api/v1.41/#operation/ContainerKill>
-    pub  fn kill(
-        &self,
-        signal: Option<&str>,
-    ) -> Result<Request, Error> {
+    pub fn kill(&self, signal: Option<String>) -> Result<Request, Error> {
         let mut path = vec![format!("/containers/{}/kill", self.id)];
         if let Some(sig) = signal {
             let encoded = form_urlencoded::Serializer::new(String::new())
-                .append_pair("signal", &sig.to_owned())
+                .append_pair("signal", sig.as_str())
                 .finish();
             path.push(encoded)
         }
@@ -175,24 +164,18 @@ impl<'docker> Container<'docker> {
     /// Rename the container instance
     ///
     /// Api Reference: <https://docs.docker.com/engine/api/v1.41/#operation/ContainerRename>
-    pub  fn rename(
-        &self,
-        name: &str,
-    ) -> Result<Request, Error> {
+    pub fn rename(&self, name: &str) -> Result<Request, Error> {
         let query = form_urlencoded::Serializer::new(String::new())
             .append_pair("name", name)
             .finish();
         self.docker
-            .post(
-                &format!("/containers/{}/rename?{}", self.id, query),
-                None,
-            )
+            .post(&format!("/containers/{}/rename?{}", self.id, query), None)
     }
 
     /// Pause the container instance
     ///
     /// Api Reference: <https://docs.docker.com/engine/api/v1.41/#operation/ContainerPause>
-    pub  fn pause(&self) -> Result<Request, Error> {
+    pub fn pause(&self) -> Result<Request, Error> {
         self.docker
             .post(&format!("/containers/{}/pause", self.id), None)
     }
@@ -200,7 +183,7 @@ impl<'docker> Container<'docker> {
     /// Unpause the container instance
     ///
     /// Api Reference: <https://docs.docker.com/engine/api/v1.41/#operation/ContainerUnpause>
-    pub  fn unpause(&self) -> Result<Request, Error> {
+    pub fn unpause(&self) -> Result<Request, Error> {
         self.docker
             .post(&format!("/containers/{}/unpause", self.id), None)
     }
@@ -208,7 +191,7 @@ impl<'docker> Container<'docker> {
     /// Wait until the container stops
     ///
     /// Api Reference: <https://docs.docker.com/engine/api/v1.41/#operation/ContainerWait>
-    pub  fn wait(&self) -> Result<Request, Error> {
+    pub fn wait(&self) -> Result<Request, Error> {
         self.docker
             .post(&format!("/containers/{}/wait", self.id), None)
     }
@@ -218,18 +201,14 @@ impl<'docker> Container<'docker> {
     /// Use remove instead to use the force/v options.
     ///
     /// Api Reference: <https://docs.docker.com/engine/api/v1.41/#operation/ContainerDelete>
-    pub  fn delete(&self) -> Result<Request, Error> {
-        self.docker
-            .delete(&format!("/containers/{}", self.id))
+    pub fn delete(&self) -> Result<Request, Error> {
+        self.docker.delete(&format!("/containers/{}", self.id))
     }
 
     /// Delete the container instance (todo: force/v)
     ///
     /// Api Reference: <https://docs.docker.com/engine/api/v1.41/#operation/ContainerRemove>
-    pub  fn remove(
-        &self,
-        opts: RmContainerOptions,
-    ) -> Result<Request, Error> {
+    pub fn remove(&self, opts: RmContainerOptions) -> Result<Request, Error> {
         let mut path = vec![format!("/containers/{}", self.id)];
         if let Some(query) = opts.serialize() {
             path.push(query)
@@ -257,10 +236,7 @@ impl<'docker> Container<'docker> {
     /// copied.  A symlink is always resolved to its target.
     ///
     /// Api Reference: <https://docs.docker.com/engine/api/v1.41/#operation/ContainerArchive>
-    pub fn copy_from(
-        &self,
-        path: &Path,
-    ) -> Result<Request, Error> {
+    pub fn copy_from(&self, path: &Path) -> Result<Request, Error> {
         let path_arg = form_urlencoded::Serializer::new(String::new())
             .append_pair("path", &path.to_string_lossy())
             .finish();
@@ -274,22 +250,17 @@ impl<'docker> Container<'docker> {
     /// The tarball will be copied to the container and extracted at the given location (see `path`).
     ///
     /// Api Reference: <https://docs.docker.com/engine/api/v1.41/#operation/PutContainerArchive>
-    pub  fn copy_file(
-        &self,
-        path: &Path,
-        body: Body,
-    ) -> Result<Request, Error> {
+    pub fn copy_file(&self, path: &Path, body: Body) -> Result<Request, Error> {
         let path_arg = form_urlencoded::Serializer::new(String::new())
             .append_pair("path", &path.to_string_lossy())
             .finish();
 
         let mime = "application/x-tar".parse::<Mime>().unwrap();
 
-        self.docker
-            .put(
-                &format!("/containers/{}/archive?{}", self.id, path_arg),
-                Some((body, mime)),
-            )
+        self.docker.put(
+            &format!("/containers/{}/archive?{}", self.id, path_arg),
+            Some((body, mime)),
+        )
     }
 }
 
@@ -309,23 +280,16 @@ impl<'docker> Containers<'docker> {
     /// Lists the container instances on the docker host
     ///
     /// Api Reference: <https://docs.docker.com/engine/api/v1.41/#operation/ContainerList>
-    pub  fn list(
-        &self,
-        opts: &ContainerListOptions,
-    ) -> Result<Request, Error> {
+    pub fn list(&self, opts: &ContainerListOptions) -> Result<Request, Error> {
         let mut path = vec!["/containers/json".to_owned()];
         if let Some(query) = opts.serialize() {
             path.push(query)
         }
-        self.docker
-            .get(&path.join("?"))
+        self.docker.get(&path.join("?"))
     }
 
     /// Returns a reference to a set of operations available to a specific container instance
-    pub fn get<S>(
-        &self,
-        name: S,
-    ) -> Container<'docker>
+    pub fn get<S>(&self, name: S) -> Container<'docker>
     where
         S: Into<String>,
     {
@@ -333,10 +297,7 @@ impl<'docker> Containers<'docker> {
     }
 
     /// Returns a builder interface for creating a new container instance
-    pub  fn create(
-        &self,
-        opts: &ContainerOptions,
-    ) -> Result<Request, Error> {
+    pub fn create(&self, opts: &ContainerOptions) -> Result<Request, Error> {
         let body: Body = opts.serialize()?.into();
         let mut path = vec!["/containers/create".to_owned()];
 
@@ -348,8 +309,10 @@ impl<'docker> Containers<'docker> {
             );
         }
 
-        self.docker
-            .post(&path.join("?"), Some((body, Mime::from("application/json"))))
+        self.docker.post(
+            &path.join("?"),
+            Some((body, Mime::from("application/json"))),
+        )
     }
 }
 
@@ -394,10 +357,7 @@ pub struct ContainerListOptionsBuilder {
 }
 
 impl ContainerListOptionsBuilder {
-    pub fn filter(
-        &mut self,
-        filters: Vec<ContainerFilter>,
-    ) -> &mut Self {
+    pub fn filter(&mut self, filters: Vec<ContainerFilter>) -> &mut Self {
         let mut param = HashMap::new();
         for f in filters {
             match f {
@@ -419,18 +379,12 @@ impl ContainerListOptionsBuilder {
         self
     }
 
-    pub fn since(
-        &mut self,
-        since: &str,
-    ) -> &mut Self {
+    pub fn since(&mut self, since: &str) -> &mut Self {
         self.params.insert("since", since.to_owned());
         self
     }
 
-    pub fn before(
-        &mut self,
-        before: &str,
-    ) -> &mut Self {
+    pub fn before(&mut self, before: &str) -> &mut Self {
         self.params.insert("before", before.to_owned());
         self
     }
@@ -448,19 +402,16 @@ impl ContainerListOptionsBuilder {
 }
 
 /// Interface for building a new docker container from an existing image
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct ContainerOptions {
     pub name: Option<String>,
-    params: HashMap<&'static str, Value>,
+    params: HashMap<String, Value>,
 }
 
 /// Function to insert a JSON value into a tree where the desired
 /// location of the value is given as a path of JSON keys.
-fn insert<'a, I, V>(
-    key_path: &mut Peekable<I>,
-    value: &V,
-    parent_node: &mut Value,
-) where
+fn insert<'a, I, V>(key_path: &mut Peekable<I>, value: &V, parent_node: &mut Value)
+where
     V: Serialize,
     I: Iterator<Item = &'a str>,
 {
@@ -503,11 +454,8 @@ impl ContainerOptions {
         body
     }
 
-    pub fn parse_from<'a, K, V>(
-        &self,
-        params: &'a HashMap<K, V>,
-        body: &mut Value,
-    ) where
+    pub fn parse_from<'a, K, V>(&self, params: &'a HashMap<K, V>, body: &mut Value)
+    where
         &'a HashMap<K, V>: IntoIterator,
         K: ToString + Eq + Hash,
         V: Serialize,
@@ -533,28 +481,19 @@ impl ContainerOptionsBuilder {
         ContainerOptionsBuilder { name: None, params }
     }
 
-    pub fn name(
-        &mut self,
-        name: &str,
-    ) -> &mut Self {
+    pub fn name(&mut self, name: &str) -> &mut Self {
         self.name = Some(name.to_owned());
         self
     }
 
     /// Specify the working dir (corresponds to the `-w` docker cli argument)
-    pub fn working_dir(
-        &mut self,
-        working_dir: &str,
-    ) -> &mut Self {
+    pub fn working_dir(&mut self, working_dir: &str) -> &mut Self {
         self.params.insert("WorkingDir", json!(working_dir));
         self
     }
 
     /// Specify any bind mounts, taking the form of `/some/host/path:/some/container/path`
-    pub fn volumes(
-        &mut self,
-        volumes: Vec<&str>,
-    ) -> &mut Self {
+    pub fn volumes(&mut self, volumes: Vec<&str>) -> &mut Self {
         self.params.insert("HostConfig.Binds", json!(volumes));
         self
     }
@@ -566,12 +505,7 @@ impl ContainerOptionsBuilder {
         self
     }
 
-    pub fn expose(
-        &mut self,
-        srcport: u32,
-        protocol: &str,
-        hostport: u32,
-    ) -> &mut Self {
+    pub fn expose(&mut self, srcport: u32, protocol: &str, hostport: u32) -> &mut Self {
         let mut exposedport: HashMap<String, String> = HashMap::new();
         exposedport.insert("HostPort".to_string(), hostport.to_string());
 
@@ -609,11 +543,7 @@ impl ContainerOptionsBuilder {
     }
 
     /// Publish a port in the container without assigning a port on the host
-    pub fn publish(
-        &mut self,
-        srcport: u32,
-        protocol: &str,
-    ) -> &mut Self {
+    pub fn publish(&mut self, srcport: u32, protocol: &str) -> &mut Self {
         /* The idea here is to go thought the 'old' port binds
          * and to apply them to the local 'exposedport_bindings' variable,
          * add the bind we want and replace the 'old' value */
@@ -642,27 +572,18 @@ impl ContainerOptionsBuilder {
         self
     }
 
-    pub fn links(
-        &mut self,
-        links: Vec<&str>,
-    ) -> &mut Self {
+    pub fn links(&mut self, links: Vec<&str>) -> &mut Self {
         self.params.insert("HostConfig.Links", json!(links));
         self
     }
 
-    pub fn memory(
-        &mut self,
-        memory: u64,
-    ) -> &mut Self {
+    pub fn memory(&mut self, memory: u64) -> &mut Self {
         self.params.insert("HostConfig.Memory", json!(memory));
         self
     }
 
     /// Total memory limit (memory + swap) in bytes. Set to -1 (default) to enable unlimited swap.
-    pub fn memory_swap(
-        &mut self,
-        memory_swap: i64,
-    ) -> &mut Self {
+    pub fn memory_swap(&mut self, memory_swap: i64) -> &mut Self {
         self.params
             .insert("HostConfig.MemorySwap", json!(memory_swap));
         self
@@ -672,10 +593,7 @@ impl ContainerOptionsBuilder {
     ///
     /// For example, setting `nano_cpus` to `500_000_000` results in the container being allocated
     /// 50% of a single CPU, while `2_000_000_000` results in the container being allocated 2 CPUs.
-    pub fn nano_cpus(
-        &mut self,
-        nano_cpus: u64,
-    ) -> &mut Self {
+    pub fn nano_cpus(&mut self, nano_cpus: u64) -> &mut Self {
         self.params.insert("HostConfig.NanoCpus", json!(nano_cpus));
         self
     }
@@ -683,97 +601,64 @@ impl ContainerOptionsBuilder {
     /// CPU quota in units of CPUs. This is a wrapper around `nano_cpus` to do the unit conversion.
     ///
     /// See [`nano_cpus`](#method.nano_cpus).
-    pub fn cpus(
-        &mut self,
-        cpus: f64,
-    ) -> &mut Self {
+    pub fn cpus(&mut self, cpus: f64) -> &mut Self {
         self.nano_cpus((1_000_000_000.0 * cpus) as u64)
     }
 
     /// Sets an integer value representing the container's relative CPU weight versus other
     /// containers.
-    pub fn cpu_shares(
-        &mut self,
-        cpu_shares: u32,
-    ) -> &mut Self {
+    pub fn cpu_shares(&mut self, cpu_shares: u32) -> &mut Self {
         self.params
             .insert("HostConfig.CpuShares", json!(cpu_shares));
         self
     }
 
-    pub fn labels(
-        &mut self,
-        labels: &HashMap<&str, &str>,
-    ) -> &mut Self {
+    pub fn labels(&mut self, labels: &HashMap<&str, &str>) -> &mut Self {
         self.params.insert("Labels", json!(labels));
         self
     }
 
     /// Whether to attach to `stdin`.
-    pub fn attach_stdin(
-        &mut self,
-        attach: bool,
-    ) -> &mut Self {
+    pub fn attach_stdin(&mut self, attach: bool) -> &mut Self {
         self.params.insert("AttachStdin", json!(attach));
         self.params.insert("OpenStdin", json!(attach));
         self
     }
 
     /// Whether to attach to `stdout`.
-    pub fn attach_stdout(
-        &mut self,
-        attach: bool,
-    ) -> &mut Self {
+    pub fn attach_stdout(&mut self, attach: bool) -> &mut Self {
         self.params.insert("AttachStdout", json!(attach));
         self
     }
 
     /// Whether to attach to `stderr`.
-    pub fn attach_stderr(
-        &mut self,
-        attach: bool,
-    ) -> &mut Self {
+    pub fn attach_stderr(&mut self, attach: bool) -> &mut Self {
         self.params.insert("AttachStderr", json!(attach));
         self
     }
 
     /// Whether standard streams should be attached to a TTY.
-    pub fn tty(
-        &mut self,
-        tty: bool,
-    ) -> &mut Self {
+    pub fn tty(&mut self, tty: bool) -> &mut Self {
         self.params.insert("Tty", json!(tty));
         self
     }
 
-    pub fn extra_hosts(
-        &mut self,
-        hosts: Vec<&str>,
-    ) -> &mut Self {
+    pub fn extra_hosts(&mut self, hosts: Vec<&str>) -> &mut Self {
         self.params.insert("HostConfig.ExtraHosts", json!(hosts));
         self
     }
 
-    pub fn volumes_from(
-        &mut self,
-        volumes: Vec<&str>,
-    ) -> &mut Self {
+    pub fn volumes_from(&mut self, volumes: Vec<&str>) -> &mut Self {
         self.params.insert("HostConfig.VolumesFrom", json!(volumes));
         self
     }
 
-    pub fn network_mode(
-        &mut self,
-        network: &str,
-    ) -> &mut Self {
+    pub fn network_mode(&mut self, network: &str) -> &mut Self {
         self.params.insert("HostConfig.NetworkMode", json!(network));
         self
     }
 
-    pub fn env<E, S>(
-        &mut self,
-        envs: E,
-    ) -> &mut Self
+    pub fn env<E, S>(&mut self, envs: E) -> &mut Self
     where
         S: AsRef<str> + Serialize,
         E: AsRef<[S]> + Serialize,
@@ -782,52 +667,33 @@ impl ContainerOptionsBuilder {
         self
     }
 
-    pub fn cmd(
-        &mut self,
-        cmds: Vec<&str>,
-    ) -> &mut Self {
+    pub fn cmd(&mut self, cmds: Vec<&str>) -> &mut Self {
         self.params.insert("Cmd", json!(cmds));
         self
     }
 
-    pub fn entrypoint(
-        &mut self,
-        entrypoint: &str,
-    ) -> &mut Self {
+    pub fn entrypoint(&mut self, entrypoint: &str) -> &mut Self {
         self.params.insert("Entrypoint", json!(entrypoint));
         self
     }
 
-    pub fn capabilities(
-        &mut self,
-        capabilities: Vec<&str>,
-    ) -> &mut Self {
+    pub fn capabilities(&mut self, capabilities: Vec<&str>) -> &mut Self {
         self.params.insert("HostConfig.CapAdd", json!(capabilities));
         self
     }
 
-    pub fn devices(
-        &mut self,
-        devices: Vec<HashMap<String, String>>,
-    ) -> &mut Self {
+    pub fn devices(&mut self, devices: Vec<HashMap<String, String>>) -> &mut Self {
         self.params.insert("HostConfig.Devices", json!(devices));
         self
     }
 
-    pub fn log_driver(
-        &mut self,
-        log_driver: &str,
-    ) -> &mut Self {
+    pub fn log_driver(&mut self, log_driver: &str) -> &mut Self {
         self.params
             .insert("HostConfig.LogConfig.Type", json!(log_driver));
         self
     }
 
-    pub fn restart_policy(
-        &mut self,
-        name: &str,
-        maximum_retry_count: u64,
-    ) -> &mut Self {
+    pub fn restart_policy(&mut self, name: &str, maximum_retry_count: u64) -> &mut Self {
         self.params
             .insert("HostConfig.RestartPolicy.Name", json!(name));
         if name == "on-failure" {
@@ -839,61 +705,40 @@ impl ContainerOptionsBuilder {
         self
     }
 
-    pub fn auto_remove(
-        &mut self,
-        set: bool,
-    ) -> &mut Self {
+    pub fn auto_remove(&mut self, set: bool) -> &mut Self {
         self.params.insert("HostConfig.AutoRemove", json!(set));
         self
     }
 
     /// Signal to stop a container as a string. Default is "SIGTERM".
-    pub fn stop_signal(
-        &mut self,
-        sig: &str,
-    ) -> &mut Self {
+    pub fn stop_signal(&mut self, sig: &str) -> &mut Self {
         self.params.insert("StopSignal", json!(sig));
         self
     }
 
     /// Signal to stop a container as an integer. Default is 15 (SIGTERM).
-    pub fn stop_signal_num(
-        &mut self,
-        sig: u64,
-    ) -> &mut Self {
+    pub fn stop_signal_num(&mut self, sig: u64) -> &mut Self {
         self.params.insert("StopSignal", json!(sig));
         self
     }
 
     /// Timeout to stop a container. Only seconds are counted. Default is 10s
-    pub fn stop_timeout(
-        &mut self,
-        timeout: Duration,
-    ) -> &mut Self {
+    pub fn stop_timeout(&mut self, timeout: Duration) -> &mut Self {
         self.params.insert("StopTimeout", json!(timeout.as_secs()));
         self
     }
 
-    pub fn userns_mode(
-        &mut self,
-        mode: &str,
-    ) -> &mut Self {
+    pub fn userns_mode(&mut self, mode: &str) -> &mut Self {
         self.params.insert("HostConfig.UsernsMode", json!(mode));
         self
     }
 
-    pub fn privileged(
-        &mut self,
-        set: bool,
-    ) -> &mut Self {
+    pub fn privileged(&mut self, set: bool) -> &mut Self {
         self.params.insert("HostConfig.Privileged", json!(set));
         self
     }
 
-    pub fn user(
-        &mut self,
-        user: &str,
-    ) -> &mut Self {
+    pub fn user(&mut self, user: &str) -> &mut Self {
         self.params.insert("User", json!(user));
         self
     }
@@ -901,7 +746,12 @@ impl ContainerOptionsBuilder {
     pub fn build(&self) -> ContainerOptions {
         ContainerOptions {
             name: self.name.clone(),
-            params: self.params.clone(),
+            params: self
+                .params
+                .clone()
+                .into_iter()
+                .map(|(k, v)| (k.to_owned(), v))
+                .collect(),
         }
     }
 }
@@ -939,52 +789,34 @@ pub struct LogsOptionsBuilder {
 }
 
 impl LogsOptionsBuilder {
-    pub fn follow(
-        &mut self,
-        f: bool,
-    ) -> &mut Self {
+    pub fn follow(&mut self, f: bool) -> &mut Self {
         self.params.insert("follow", f.to_string());
         self
     }
 
-    pub fn stdout(
-        &mut self,
-        s: bool,
-    ) -> &mut Self {
+    pub fn stdout(&mut self, s: bool) -> &mut Self {
         self.params.insert("stdout", s.to_string());
         self
     }
 
-    pub fn stderr(
-        &mut self,
-        s: bool,
-    ) -> &mut Self {
+    pub fn stderr(&mut self, s: bool) -> &mut Self {
         self.params.insert("stderr", s.to_string());
         self
     }
 
-    pub fn timestamps(
-        &mut self,
-        t: bool,
-    ) -> &mut Self {
+    pub fn timestamps(&mut self, t: bool) -> &mut Self {
         self.params.insert("timestamps", t.to_string());
         self
     }
 
     /// how_many can either be "all" or a to_string() of the number
-    pub fn tail(
-        &mut self,
-        how_many: &str,
-    ) -> &mut Self {
+    pub fn tail(&mut self, how_many: &str) -> &mut Self {
         self.params.insert("tail", how_many.to_owned());
         self
     }
 
     #[cfg(feature = "chrono")]
-    pub fn since<Tz>(
-        &mut self,
-        timestamp: &chrono::DateTime<Tz>,
-    ) -> &mut Self
+    pub fn since<Tz>(&mut self, timestamp: &chrono::DateTime<Tz>) -> &mut Self
     where
         Tz: chrono::TimeZone,
     {
@@ -994,10 +826,7 @@ impl LogsOptionsBuilder {
     }
 
     #[cfg(not(feature = "chrono"))]
-    pub fn since(
-        &mut self,
-        timestamp: i64,
-    ) -> &mut Self {
+    pub fn since(&mut self, timestamp: i64) -> &mut Self {
         self.params.insert("since", timestamp.to_string());
         self
     }
@@ -1042,18 +871,12 @@ pub struct RmContainerOptionsBuilder {
 }
 
 impl RmContainerOptionsBuilder {
-    pub fn force(
-        &mut self,
-        f: bool,
-    ) -> &mut Self {
+    pub fn force(&mut self, f: bool) -> &mut Self {
         self.params.insert("force", f.to_string());
         self
     }
 
-    pub fn volumes(
-        &mut self,
-        s: bool,
-    ) -> &mut Self {
+    pub fn volumes(&mut self, s: bool) -> &mut Self {
         self.params.insert("v", s.to_string());
         self
     }
@@ -1298,208 +1121,4 @@ pub struct ContainerCreateInfo {
 #[serde(rename_all = "PascalCase")]
 pub struct Exit {
     pub status_code: u64,
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn container_options_simple() {
-        let builder = ContainerOptionsBuilder::new("test_image");
-        let options = builder.build();
-
-        assert_eq!(
-            r#"{"HostConfig":{},"Image":"test_image"}"#,
-            options.serialize().unwrap()
-        );
-    }
-
-    #[test]
-    fn container_options_env() {
-        let options = ContainerOptionsBuilder::new("test_image")
-            .env(vec!["foo", "bar"])
-            .build();
-
-        assert_eq!(
-            r#"{"Env":["foo","bar"],"HostConfig":{},"Image":"test_image"}"#,
-            options.serialize().unwrap()
-        );
-    }
-
-    #[test]
-    fn container_options_env_dynamic() {
-        let env: Vec<String> = ["foo", "bar", "baz"]
-            .iter()
-            .map(|s| String::from(*s))
-            .collect();
-
-        let options = ContainerOptionsBuilder::new("test_image").env(&env).build();
-
-        assert_eq!(
-            r#"{"Env":["foo","bar","baz"],"HostConfig":{},"Image":"test_image"}"#,
-            options.serialize().unwrap()
-        );
-    }
-
-    #[test]
-    fn container_options_user() {
-        let options = ContainerOptionsBuilder::new("test_image")
-            .user("alice")
-            .build();
-
-        assert_eq!(
-            r#"{"HostConfig":{},"Image":"test_image","User":"alice"}"#,
-            options.serialize().unwrap()
-        );
-    }
-
-    #[test]
-    fn container_options_host_config() {
-        let options = ContainerOptionsBuilder::new("test_image")
-            .network_mode("host")
-            .auto_remove(true)
-            .privileged(true)
-            .build();
-
-        assert_eq!(
-            r#"{"HostConfig":{"AutoRemove":true,"NetworkMode":"host","Privileged":true},"Image":"test_image"}"#,
-            options.serialize().unwrap()
-        );
-    }
-
-    #[test]
-    fn container_options_expose() {
-        let options = ContainerOptionsBuilder::new("test_image")
-            .expose(80, "tcp", 8080)
-            .build();
-        assert_eq!(
-            r#"{"ExposedPorts":{"80/tcp":{}},"HostConfig":{"PortBindings":{"80/tcp":[{"HostPort":"8080"}]}},"Image":"test_image"}"#,
-            options.serialize().unwrap()
-        );
-        // try exposing two
-        let options = ContainerOptionsBuilder::new("test_image")
-            .expose(80, "tcp", 8080)
-            .expose(81, "tcp", 8081)
-            .build();
-        assert_eq!(
-            r#"{"ExposedPorts":{"80/tcp":{},"81/tcp":{}},"HostConfig":{"PortBindings":{"80/tcp":[{"HostPort":"8080"}],"81/tcp":[{"HostPort":"8081"}]}},"Image":"test_image"}"#,
-            options.serialize().unwrap()
-        );
-    }
-
-    #[test]
-    fn container_options_publish() {
-        let options = ContainerOptionsBuilder::new("test_image")
-            .publish(80, "tcp")
-            .build();
-        assert_eq!(
-            r#"{"ExposedPorts":{"80/tcp":{}},"HostConfig":{},"Image":"test_image"}"#,
-            options.serialize().unwrap()
-        );
-        // try exposing two
-        let options = ContainerOptionsBuilder::new("test_image")
-            .publish(80, "tcp")
-            .publish(81, "tcp")
-            .build();
-        assert_eq!(
-            r#"{"ExposedPorts":{"80/tcp":{},"81/tcp":{}},"HostConfig":{},"Image":"test_image"}"#,
-            options.serialize().unwrap()
-        );
-    }
-
-    /// Test container option PublishAllPorts
-    #[test]
-    fn container_options_publish_all_ports() {
-        let options = ContainerOptionsBuilder::new("test_image")
-            .publish_all_ports()
-            .build();
-
-        assert_eq!(
-            r#"{"HostConfig":{"PublishAllPorts":true},"Image":"test_image"}"#,
-            options.serialize().unwrap()
-        );
-    }
-
-    /// Test container options that are nested 3 levels deep.
-    #[test]
-    fn container_options_nested() {
-        let options = ContainerOptionsBuilder::new("test_image")
-            .log_driver("fluentd")
-            .build();
-
-        assert_eq!(
-            r#"{"HostConfig":{"LogConfig":{"Type":"fluentd"}},"Image":"test_image"}"#,
-            options.serialize().unwrap()
-        );
-    }
-
-    /// Test the restart policy settings
-    #[test]
-    fn container_options_restart_policy() {
-        let mut options = ContainerOptionsBuilder::new("test_image")
-            .restart_policy("on-failure", 10)
-            .build();
-
-        assert_eq!(
-            r#"{"HostConfig":{"RestartPolicy":{"MaximumRetryCount":10,"Name":"on-failure"}},"Image":"test_image"}"#,
-            options.serialize().unwrap()
-        );
-
-        options = ContainerOptionsBuilder::new("test_image")
-            .restart_policy("always", 0)
-            .build();
-
-        assert_eq!(
-            r#"{"HostConfig":{"RestartPolicy":{"Name":"always"}},"Image":"test_image"}"#,
-            options.serialize().unwrap()
-        );
-    }
-
-    #[cfg(feature = "chrono")]
-    #[test]
-    fn logs_options() {
-        let timestamp = chrono::NaiveDateTime::from_timestamp(2_147_483_647, 0);
-        let since = chrono::DateTime::<chrono::Utc>::from_utc(timestamp, chrono::Utc);
-
-        let options = LogsOptionsBuilder::default()
-            .follow(true)
-            .stdout(true)
-            .stderr(true)
-            .timestamps(true)
-            .tail("all")
-            .since(&since)
-            .build();
-
-        let serialized = options.serialize().unwrap();
-
-        assert!(serialized.contains("follow=true"));
-        assert!(serialized.contains("stdout=true"));
-        assert!(serialized.contains("stderr=true"));
-        assert!(serialized.contains("timestamps=true"));
-        assert!(serialized.contains("tail=all"));
-        assert!(serialized.contains("since=2147483647"));
-    }
-
-    #[cfg(not(feature = "chrono"))]
-    #[test]
-    fn logs_options() {
-        let options = LogsOptionsBuilder::default()
-            .follow(true)
-            .stdout(true)
-            .stderr(true)
-            .timestamps(true)
-            .tail("all")
-            .since(2_147_483_647)
-            .build();
-
-        let serialized = options.serialize().unwrap();
-
-        assert!(serialized.contains("follow=true"));
-        assert!(serialized.contains("stdout=true"));
-        assert!(serialized.contains("stderr=true"));
-        assert!(serialized.contains("timestamps=true"));
-        assert!(serialized.contains("tail=all"));
-        assert!(serialized.contains("since=2147483647"));
-    }
 }

@@ -2,20 +2,15 @@ use std::net::SocketAddr;
 
 use url::Url;
 
-use crate::{State, docker::docker::Docker};
+use crate::{
+    docker::docker::{Docker, EventsOptions},
+    State,
+};
 use tide::{Request, Response, Result, StatusCode};
 
 use serde::{Deserialize, Serialize};
 
-use http_client::HttpClient;
-
-// use shiplift::Docker;
-
-// use bollard::Docker;
-// use bollard::API_DEFAULT_VERSION;
-
-
-
+pub mod container;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PlotCount {
@@ -52,50 +47,35 @@ pub async fn plot_complete(mut req: Request<State>) -> Result {
     Ok(response)
 }
 
-pub async fn docker_info_shiplift(req: Request<State>) -> Result {
-    let url = Url::parse("http://localhost:8010/")?;
-    let docker = Docker::host(url);
-    let state = req.state();
-    log::info!("request for docker info.");
-    match docker.info() {
-        Ok(request) => {
-            log::info!("request for docker {:?}", request);
-            let response = state.client.send(request).await?;
-            log::info!("response from docker {:?}", response);
-            Ok(tide::Response::from_res(response))
-        },
-        Err(err) => {
-            Err(tide::Error::new(StatusCode::InternalServerError, err.into_inner()))
-        }
-    }
+pub fn docker_not_found_error() -> tide::Error {
+    tide::Error::from_str(StatusCode::InternalServerError, "docker not found.")
 }
 
-// pub async fn docker_info_bollard(_: Request<State>) -> Result {
-//     let docker = bollard::Docker::connect_with_http("http://localhost:8010", 30, API_DEFAULT_VERSION);
-//     // let docker = Docker::host(Uri::from_static("http://localhost:8010"));
+pub async fn docker_info(req: Request<State>) -> Result {
+    let url = req.ext::<Url>().ok_or(docker_not_found_error())?;
+    let docker = Docker::host(url.clone());
+    let response = req.state().send(docker.info()?).await?;
+    Ok(tide::Response::from_res(response))
+}
 
-//     match docker {
-//         Ok(d) => {
-//             let info = d.info().await;
-//             match info {
-//                 Ok(info) => {
-//                     println!("info {:?}", info);
-//                     let data = serde_json::to_string(&info)?;
-//                     let mut response = Response::new(200);
-//                     response.set_body(data);
-//                     Ok(response)
-//                 },
-//                 Err(err) => {
-//                     eprintln!("Error: {}", err);
-//                     let err = tide::Error::new(StatusCode::InternalServerError, err);
-//                     Err(err)
-//                 },
-//             }
-//         },
-//         Err(err) => {
-//             eprintln!("Error: {}", err);
-//             let err = tide::Error::new(StatusCode::InternalServerError, err);
-//             Err(err)
-//         },
-//     }
-// }
+pub async fn docker_ping(req: Request<State>) -> Result {
+    let url = req.ext::<Url>().ok_or(docker_not_found_error())?;
+    let docker = Docker::host(url.clone());
+    let response = req.state().send(docker.ping()?).await?;
+    Ok(tide::Response::from_res(response))
+}
+
+pub async fn docker_events(req: Request<State>) -> Result {
+    let url = req.ext::<Url>().ok_or(docker_not_found_error())?;
+    let docker = Docker::host(url.clone());
+    let options = EventsOptions::builder().build();
+    let response = req.state().send(docker.events(&options)?).await?;
+    Ok(tide::Response::from_res(response))
+}
+
+pub async fn docker_version(req: Request<State>) -> Result {
+    let url = req.ext::<Url>().ok_or(docker_not_found_error())?;
+    let docker = Docker::host(url.clone());
+    let response = req.state().send(docker.version()?).await?;
+    Ok(tide::Response::from_res(response))
+}
